@@ -26,7 +26,7 @@ export class DataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> {
       return new MutableDataFrame({
         refId: target.refId,
           fields: [
-            { name: 'timestamp', type: FieldType.time, values: [from, from + 1000, from + 20000, from + 3000, to] },
+            { name: 'timestamp', type: FieldType.time, values: [from + 200000, from + 400000, from + 600000, to - 300000, to] },
             { name: 'body', type: FieldType.string, values: ['message one', 'message two', 'message three', 'message four', 'message five'] },
             { name: 'severity', type: FieldType.string, values: ['critical', 'error', 'warning', 'debug', 'trace'] },
             { name: 'id', type: FieldType.string, values: ['xxx-001', 'xyz-002', 'xyz-003', 'xyz-004', 'xyz-005'] },
