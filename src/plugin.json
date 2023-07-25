@@ -1,0 +1,26 @@
+{
+  "$schema": "https://raw.githubusercontent.com/grafana/grafana/master/docs/sources/developers/plugins/plugin.schema.json",
+  "type": "datasource",
+  "name": "Test Logs",
+  "id": "grafana-testlogs-datasource",
+  "metrics": true,
+  "info": {
+    "description": "Data source plugin to test log APIs with Grafana",
+    "author": {
+      "name": "Grafana"
+    },
+    "keywords": ["datasource"],
+    "logos": {
+      "small": "img/log.png",
+      "large": "img/log.png"
+    },
+    "links": [],
+    "screenshots": [],
+    "version": "%VERSION%",
+    "updated": "%TODAY%"
+  },
+  "dependencies": {
+    "grafanaDependency": ">=9.5.3",
+    "plugins": []
+  }
+}
