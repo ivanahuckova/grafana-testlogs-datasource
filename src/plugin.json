@@ -4,6 +4,8 @@
   "name": "Test Logs",
   "id": "grafana-testlogs-datasource",
   "metrics": true,
+  "logs": true,
+  "streaming": true,
   "info": {
     "description": "Data source plugin to test log APIs with Grafana",
     "author": {
@@ -20,7 +22,7 @@
     "updated": "%TODAY%"
   },
   "dependencies": {
-    "grafanaDependency": ">=9.5.3",
+    "grafanaDependency": ">=10.0.0",
     "plugins": []
   }
 }
