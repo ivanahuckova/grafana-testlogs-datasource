@@ -46,7 +46,7 @@ export function queryLogsVolume(
       data: [],
     });
 
-    const queryResponse = datasource.query(logsVolumeRequest, true);
+    const queryResponse = datasource.query(logsVolumeRequest);
     const queryObservable = from(queryResponse);
 
     const subscription = queryObservable.subscribe({

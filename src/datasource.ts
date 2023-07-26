@@ -16,11 +16,13 @@ import {
   CoreApp,
   DataQueryError,
   LoadingState,
+  DataFrame,
 } from '@grafana/data';
 
 import { MyQuery, MyDataSourceOptions } from './types';
 import { fetchLogs, Log } from './data'
-import { catchError, from, lastValueFrom } from 'rxjs';
+import { Observable, catchError, forkJoin, from, interval, lastValueFrom } from 'rxjs';
+import { map, mergeMap } from 'rxjs/operators'
 
 const LIMIT = 100
 
@@ -29,17 +31,47 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
     super(instanceSettings);
   }
 
-  async query(request: DataQueryRequest<MyQuery>): Promise<DataQueryResponse> {
-    const { range, targets } = request;
+  query(request: DataQueryRequest<MyQuery>): Observable<DataQueryResponse> {
+    const { range, targets, liveStreaming } = request;
 
-    const data = await Promise.all(
-      targets.map(async target => {
-        const logs = await fetchLogs(LIMIT, range!.from.valueOf(), range!.to.valueOf())
-        return this.processLogsToDataFrames(logs, target)
-      })
+    if (liveStreaming) {
+      // To simplify this, we only support one target in live streaming mode
+      const target = targets[0]
+      return interval(1000).pipe(
+        mergeMap((v, i) => {
+          return from(fetchLogs(LIMIT, range!.from.valueOf() + v * 10000, range!.to.valueOf() + v * 10000)).pipe(
+            map((logs: Log[]) => {
+          return {data: [this.processLogsToDataFrames(logs, target)], state: LoadingState.Streaming}
+        })
+          )
+        }),
+        ) 
+    }
+
+    const fetchLogsObservables = targets.map((target) => {
+      return from(fetchLogs(LIMIT, range!.from.valueOf(), range!.to.valueOf())).pipe(
+        map((logs: Log[]) => {
+          return {data: [this.processLogsToDataFrames(logs, target)], state: LoadingState.Done}
+        })
+      )
+    })
+
+    if (fetchLogsObservables.length === 1) {
+      return fetchLogsObservables[0] 
+    }
+
+    return forkJoin(fetchLogsObservables).pipe(
+      map((results: DataQueryResponse[]) => {
+          const data: DataFrame[] = [];
+          for (const result of results) {
+            for (const frame of result.data) {
+              data.push(frame);
+            }
+          }
+          return { state: LoadingState.Done, data }
+        })
     )
-    return { data, state: request.liveStreaming ? LoadingState.Streaming : LoadingState.Done }
-}
+  }
 
   modifyQuery(query: MyQuery, action: QueryFixAction): MyQuery {
     let queryText = query.queryText ?? '';
@@ -126,7 +158,6 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
       to: options?.direction === LogRowContextQueryDirection.Forward ? dateTime(row.timeEpochMs) :  dateTime(row.timeEpochMs + lookBack)
     }
 
-    row  
     const range = {
       ...timeRange,
       raw: timeRange
@@ -147,7 +178,7 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
   }
 
     return lastValueFrom(
-      from(this.query(request)).pipe(
+      this.query(request).pipe(
         catchError((err) => {
           const error: DataQueryError = {
             message: 'Error during context query. Please check JS console logs.',
