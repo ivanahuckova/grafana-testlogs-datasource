@@ -48,7 +48,7 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
         ) 
     }
 
-    const fetchLogsObservables = targets.map((target) => {
+    const fetchLogsObservables = targets.filter(t => !t.hide).map((target) => {
       return from(fetchLogs(LIMIT, range!.from.valueOf(), range!.to.valueOf())).pipe(
         map((logs: Log[]) => {
           return {data: [this.processLogsToDataFrames(logs, target)], state: LoadingState.Done}
@@ -245,7 +245,7 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
   //     this,
   //     { ...logsVolumeRequest, targets },
   //     {
-  //       // extractLevel is optional. By implementing it, logs volume will produce color-coded graph.
+  //       // Mocked to just produce unknown levels
   //       extractLevel: () => LogLevel.unknown,
   //       range: request.range,
   //       targets: request.targets,
