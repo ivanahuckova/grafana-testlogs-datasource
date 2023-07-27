@@ -192,67 +192,6 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
   }
 
 
-
-  // getSupportedSupplementaryQueryTypes() {
-  //   return []
-  // }
-
-  //  // Returns a supplementary query to be used to fetch supplementary data based on the provided type and original query.
-  // // If provided query is not suitable for provided supplementary query type, undefined should be returned.
-  // getSupplementaryQuery(options: SupplementaryQueryOptions, query: MyQuery): MyQuery | undefined {
-  //   if (!this.getSupportedSupplementaryQueryTypes().includes(options.type)) {
-  //     return undefined;
-  //   }
-
-  //   switch (options.type) {
-  //     case SupplementaryQueryType.LogsVolume:
-  //       return { ...query, queryText: 'count', refId: 'logsVolume' }
-  //     default:
-  //       return undefined;
-  //   }
-  // }
-
-  // // Returns an observable that will be used to fetch supplementary data based on the provided
-  // // supplementary query type and original request.
-  // getDataProvider(type: SupplementaryQueryType, request: DataQueryRequest<MyQuery>) {
-  //   if (!this.getSupportedSupplementaryQueryTypes().includes(type)) {
-  //     return undefined;
-  //   }
-
-  //   switch (type) {
-  //     case SupplementaryQueryType.LogsVolume:
-  //       return this.getLogsVolumeDataProvider(request);
-  //     default:
-  //       return undefined;
-  //   }
-  // }
-
-  // // This is a mocked implementation. Be sure to adjust this based your data source logic.
-  // private getLogsVolumeDataProvider(
-  //   request: DataQueryRequest<MyQuery>
-  // ){
-  //   const logsVolumeRequest = cloneDeep(request);
-  //   const targets = logsVolumeRequest.targets
-  //     .map((query) => this.getSupplementaryQuery({ type: SupplementaryQueryType.LogsVolume }, query))
-  //     .filter((query): query is MyQuery => !!query);
-
-  //   if (!targets.length) {
-  //     return undefined;
-  //   }
-
-  //   // Use imported queryLogsVolume (this is not exported so we are using duplicated code from logsModel.ts)
-  //   return queryLogsVolume(
-  //     this,
-  //     { ...logsVolumeRequest, targets },
-  //     {
-  //       // extractLevel is optional. By implementing it, logs volume will produce color-coded graph.
-  //       extractLevel: () => LogLevel.unknown,
-  //       range: request.range,
-  //       targets: request.targets,
-  //     }
-  //   );
-  // }
-
   async testDatasource() {
     // Implement a health check for your data source.
     return {
