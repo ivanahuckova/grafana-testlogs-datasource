@@ -6,17 +6,19 @@ export type Log = {
   stringField: string,
   numberField: number,
   objectField: object,
+  commonAttribute: string,
 }
 
-export async function fetchLogs(count: number, from: number, to: number): Promise<Log[]> {  
+// Mock function that fetches logs from the server
+export async function fetchLogs(count: number, from: number, to: number, queryText: string): Promise<Log[]> {  
   return new Promise((resolve) => {
   setTimeout(() => {
-    resolve(createLogs(count, from, to));
+    resolve(createLogs(count, from, to, queryText));
   }, 300);
   })
 }
 
-function createLogs(count: number, from: number, to: number) {
+function createLogs(count: number, from: number, to: number, queryText: string) {
   const logs: Log[] = []
   for (let i = 0; i < count; i++) {
     const timestamp = Math.floor(Math.random() * (to - from + 1) + from) 
@@ -24,8 +26,9 @@ function createLogs(count: number, from: number, to: number) {
     const severity = i % 5 === 1 ? 'error' : 'info'
     const number = i+ 1000
     const string = `string ${i}`
+    const commonAttribute = 'common'
     logs.push({
-      body: `timestamp=${timestamp} line=${i} id=${id} number=${number} string=${string}`,
+      body: `timestamp=${timestamp} line=${i} id=${id} number=${number} string=${string}${queryText ? ` queryText=${queryText}` : ''}`,
       severity,
       timestamp,
       id,
@@ -34,6 +37,7 @@ function createLogs(count: number, from: number, to: number) {
       objectField: {
         key: `value ${i}`,
       },
+      commonAttribute,
     })
   }
 

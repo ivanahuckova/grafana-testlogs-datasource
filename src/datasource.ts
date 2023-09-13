@@ -3,7 +3,6 @@ import {
   DataQueryResponse,
   DataSourceApi,
   DataSourceInstanceSettings,
-  MutableDataFrame,
   FieldType,
   DataFrameType,
   QueryFixAction,
@@ -17,39 +16,41 @@ import {
   DataQueryError,
   LoadingState,
   DataFrame,
+  createDataFrame,
 } from '@grafana/data';
 
 import { MyQuery, MyDataSourceOptions } from './types';
-import { fetchLogs, Log } from './data'
-import { Observable, catchError, forkJoin, from, interval, lastValueFrom } from 'rxjs';
+import { fetchLogs, Log } from './mockDataRequest'
+import { catchError, forkJoin, from, interval, lastValueFrom } from 'rxjs';
 import { map, mergeMap } from 'rxjs/operators'
-
-const LIMIT = 100
 
 export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> implements DataSourceWithLogsContextSupport<MyQuery> {
   constructor(instanceSettings: DataSourceInstanceSettings<MyDataSourceOptions>) {
     super(instanceSettings);
   }
 
-  query(request: DataQueryRequest<MyQuery>): Observable<DataQueryResponse> {
+  query(request: DataQueryRequest<MyQuery>): any {
     const { range, targets, liveStreaming } = request;
 
+    // Process live streaming request
     if (liveStreaming) {
       // To simplify this, we only support one target in live streaming mode
       const target = targets[0]
       return interval(1000).pipe(
-        mergeMap((v, i) => {
-          return from(fetchLogs(LIMIT, range!.from.valueOf() + v * 10000, range!.to.valueOf() + v * 10000)).pipe(
+        mergeMap((v) => {
+          const addedTime = v * 10000
+          return from(fetchLogs(target.limit, range!.from.valueOf() + addedTime, range!.to.valueOf() + addedTime, target.queryText)).pipe(
             map((logs: Log[]) => {
-          return {data: [this.processLogsToDataFrames(logs, target)], state: LoadingState.Streaming}
-        })
+              return {data: [this.processLogsToDataFrames(logs, target)], state: LoadingState.Streaming}
+            })
           )
         }),
-        ) 
+      )
     }
 
+    // Process regular log request
     const fetchLogsObservables = targets.map((target) => {
-      return from(fetchLogs(LIMIT, range!.from.valueOf(), range!.to.valueOf())).pipe(
+      return from(fetchLogs(target.limit, range!.from.valueOf(), range!.to.valueOf(), target.queryText)).pipe(
         map((logs: Log[]) => {
           return {data: [this.processLogsToDataFrames(logs, target)], state: LoadingState.Done}
         })
@@ -57,7 +58,7 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
     })
 
     if (fetchLogsObservables.length === 1) {
-      return fetchLogsObservables[0] 
+      return fetchLogsObservables[0]
     }
 
     return forkJoin(fetchLogsObservables).pipe(
@@ -73,65 +74,24 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
     )
   }
 
+  // With modifyQuery, users can use log details to adjust the query
   modifyQuery(query: MyQuery, action: QueryFixAction): MyQuery {
     let queryText = query.queryText ?? '';
     switch (action.type) {
       case 'ADD_FILTER':
         if (action.options?.key && action.options?.value) {
-          queryText = `${action.options.value}`
+          queryText = `${queryText} ${action.options?.key}=${action.options.value}`
         }
         break;
       case 'ADD_FILTER_OUT':
         {
           if (action.options?.key && action.options?.value) {
-             queryText = ``
+            queryText = `${queryText} ${action.options?.key}!=${action.options.value}`
           }
         }
         break;
     }
     return {...query, queryText};
-  }
-
-
-    private processLogsToDataFrames(logs: Log[], target: MyQuery) {
-      const timeStampValues: number[] = []
-      const bodyValues: string[] = []
-      const severityValues: string[] = []
-      const idValues: string[] = []
-      const attributesValues: object[] = []
-
-      logs.forEach((log) => {
-        const {timestamp, body, severity, id, ...rest} = log
-        timeStampValues.push(timestamp)
-        bodyValues.push(body)
-        severityValues.push(severity)
-        idValues.push(id)
-        attributesValues.push(rest)
-      })
-
-      const dataFrame = 
-        new MutableDataFrame({
-        refId: target.refId,
-          fields: [
-            { name: 'timestamp', type: FieldType.time, values:  timeStampValues },
-            { name: 'body', type: FieldType.string, values: bodyValues },
-            { name: 'severity', type: FieldType.string, values: severityValues },
-            { name: 'id', type: FieldType.string, values: idValues },
-            { name: 'attributes', type: FieldType.other, values:  attributesValues},
-        ],
-        meta: {
-          // @ts-ignore - implemented in new release
-          type: DataFrameType.LogLines, 
-          preferredVisualisationType: 'logs',
-          custom: {
-            limit: LIMIT,
-            //error: "test error message",
-            searchWords: [target.queryText]
-          }
-        }
-      });
-
-      return dataFrame
   }
 
   showContextToggle() {
@@ -143,8 +103,13 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
     options?: LogRowContextOptions,
     query?: MyQuery
   ) {
-    const contextQuery = query ?? null
-    return Promise.resolve(contextQuery)
+    if (query) {
+      // Create a new query for the log context
+      const contextQuery = {...query, queryText: `${query.queryText} log-context + ${row.uid}`}
+      return Promise.resolve(contextQuery)
+    }
+
+    return Promise.resolve(null)
   }
 
   async getLogRowContext(
@@ -158,6 +123,8 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
       to: options?.direction === LogRowContextQueryDirection.Forward ? dateTime(row.timeEpochMs) :  dateTime(row.timeEpochMs + lookBack)
     }
 
+    const contextQuery = await this.getLogRowContextQuery(row, options, query)
+
     const range = {
       ...timeRange,
       raw: timeRange
@@ -165,7 +132,7 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
     
     const intervalInfo = rangeUtil.calculateInterval(range, 1);
     const request = {
-    targets: query ? [query] : [],
+    targets: contextQuery ? [contextQuery] : [],
     requestId: `context-${query?.refId}`,
     interval: intervalInfo.interval,
     intervalMs: intervalInfo.intervalMs,
@@ -177,6 +144,7 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
     hideFromInspector: true,
   }
 
+    // Execute log context query
     return lastValueFrom(
       this.query(request).pipe(
         catchError((err) => {
@@ -198,5 +166,42 @@ export class MyDataSource extends DataSourceApi<MyQuery, MyDataSourceOptions> im
       status: 'success',
       message: 'Success',
     };
+  }
+
+    private processLogsToDataFrames(logs: Log[], target: MyQuery) {
+    const timeStampValues: number[] = []
+    const bodyValues: string[] = []
+    const severityValues: string[] = []
+    const idValues: string[] = []
+    const attributesValues: object[] = []
+    logs.forEach((log) => {
+      const {timestamp, body, severity, id, ...rest} = log
+      timeStampValues.push(timestamp)
+      bodyValues.push(body)
+      severityValues.push(severity)
+      idValues.push(id)
+      attributesValues.push(rest)
+    })
+    
+    const dataFrame = createDataFrame({
+      refId: target.refId,
+        fields: [
+          { name: 'timestamp', type: FieldType.time, values:  timeStampValues },
+          { name: 'body', type: FieldType.string, values: bodyValues },
+          { name: 'severity', type: FieldType.string, values: severityValues },
+          { name: 'id', type: FieldType.string, values: idValues },
+          { name: 'attributes', type: FieldType.other, values:  attributesValues},
+      ],
+      meta: {
+        type: DataFrameType.LogLines, 
+        preferredVisualisationType: 'logs',
+        custom: {
+          limit: target.limit,
+          //error: "test error message",
+          searchWords: [target.queryText]
+        }
+      }
+    });
+    return dataFrame
   }
 }
